@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Firebird Log Analyzer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .chart-container {
+            height: 400px;
+            position: relative;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen p-8">
+    <div class="max-w-7xl mx-auto">
+        <h1 class="text-3xl font-bold mb-8">Firebird Log Analyzer</h1>
+
+        <!-- Upload Form -->
+        <form id="uploadForm" class="mb-8">
+            <div class="flex gap-4">
+                <input type="file" id="logFile" accept=".json" required class="border p-2 rounded">
+                <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+                    Analyze Log
+                </button>
+            </div>
+        </form>
+
+        <!-- Filters Section -->
+        <div id="filters" class="mb-8 hidden">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Execution Time (ms)</label>
+                    <input type="number" id="timeFilter" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Statement Type</label>
+                    <select id="typeFilter" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm"></select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Table</label>
+                    <select id="tableFilter" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm"></select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">View</label>
+                    <select id="viewFilter" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                        <option value="">All Queries</option>
+                        <option value="slow">Slow Queries (>1s)</option>
+                        <option value="noindex">No Index Usage</option>
+                        <option value="top6">Top 6 Slowest</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- KPIs Section -->
+        <div id="kpis" class="mb-8 hidden">
+            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                <div class="bg-white p-4 rounded-lg shadow">
+                    <h3 class="text-sm font-medium text-gray-500">Total Queries</h3>
+                    <p id="totalQueries" class="mt-1 text-2xl font-semibold text-gray-900">0</p>
+                </div>
+                <div class="bg-white p-4 rounded-lg shadow">
+                    <h3 class="text-sm font-medium text-gray-500">Avg Execution Time</h3>
+                    <p id="avgExecTime" class="mt-1 text-2xl font-semibold text-gray-900">0ms</p>
+                </div>
+                <div class="bg-white p-4 rounded-lg shadow">
+                    <h3 class="text-sm font-medium text-gray-500">Max Execution Time</h3>
+                    <p id="maxExecTime" class="mt-1 text-2xl font-semibold text-gray-900">0ms</p>
+                </div>
+                <div class="bg-white p-4 rounded-lg shadow">
+                    <h3 class="text-sm font-medium text-gray-500">Slow Queries (>1s)</h3>
+                    <p id="slowQueries" class="mt-1 text-2xl font-semibold text-red-600">0</p>
+                </div>
+                <div class="bg-white p-4 rounded-lg shadow">
+                    <h3 class="text-sm font-medium text-gray-500">No Index Queries</h3>
+                    <p id="noIndexQueries" class="mt-1 text-2xl font-semibold text-yellow-600">0</p>
+                </div>
+                <div class="bg-white p-4 rounded-lg shadow">
+                    <h3 class="text-sm font-medium text-gray-500">Index Usage Rate</h3>
+                    <p id="indexUsageRate" class="mt-1 text-2xl font-semibold text-green-600">0%</p>
+                </div>
+                <div class="bg-white p-4 rounded-lg shadow">
+                    <h3 class="text-sm font-medium text-gray-500">Total Reads</h3>
+                    <p id="totalReads" class="mt-1 text-2xl font-semibold text-blue-600">0</p>
+                </div>
+                <div class="bg-white p-4 rounded-lg shadow">
+                    <h3 class="text-sm font-medium text-gray-500">Total Writes</h3>
+                    <p id="totalWrites" class="mt-1 text-2xl font-semibold text-purple-600">0</p>
+                </div>
+                <div class="bg-white p-4 rounded-lg shadow">
+                    <h3 class="text-sm font-medium text-gray-500">Total Fetches</h3>
+                    <p id="totalFetches" class="mt-1 text-2xl font-semibold text-indigo-600">0</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Section -->
+        <div id="charts" class="mb-8 hidden grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="bg-white p-4 rounded-lg shadow">
+                <h3 class="text-lg font-semibold mb-4">Query Performance Distribution</h3>
+                <div class="chart-container">
+                    <canvas id="performanceChart"></canvas>
+                </div>
+            </div>
+            <div class="bg-white p-4 rounded-lg shadow">
+                <h3 class="text-lg font-semibold mb-4">Most Accessed Tables</h3>
+                <div class="chart-container">
+                    <canvas id="tableAccessChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Table -->
+        <div id="results" class="hidden">
+            <div class="bg-white shadow-md rounded-lg overflow-hidden">
+                <table class="min-w-full">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Timestamp</th>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Event</th>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Statement</th>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tables</th>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time (ms)</th>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Index</th>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Reads</th>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Writes</th>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fetches</th>
+                        </tr>
+                    </thead>
+                    <tbody id="resultsBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="/static/js/utils.js"></script>
+    <script src="/static/js/charts.js"></script>
+    <script src="/static/js/filters.js"></script>
+    <script src="/static/js/display.js"></script>
+    <script src="/static/js/main.js"></script>
+</body>
+</html>
