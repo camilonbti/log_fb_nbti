@@ -1,110 +1,123 @@
-function destroyChart(containerId) {
-    const chartInstance = Chart.getChart(containerId);
-    if (chartInstance) {
-        chartInstance.destroy();
+function renderCharts(data) {
+    console.log("Rendering charts with data:", data);
+    const chartsDiv = document.querySelector('.charts');
+    if (!chartsDiv) {
+        console.error("Charts container not found");
+        return;
     }
+    
+    if (!data || data.length === 0) {
+        console.warn("No data available for charts");
+        chartsDiv.innerHTML = '<p class="text-center text-gray-500">No data available for visualization</p>';
+        return;
+    }
+
+    chartsDiv.style.display = 'block';
+    renderSummaryChart(data);
+    renderTimelineChart(data);
+    renderPlanAnalysisChart(data);
 }
 
-function renderPerformanceChart(data, containerId) {
-    destroyChart(containerId);
-    const ctx = document.getElementById(containerId).getContext('2d');
-    const timeRanges = [
-        {min: 0, max: 100, label: '0-100ms'},
-        {min: 100, max: 500, label: '100-500ms'},
-        {min: 500, max: 1000, label: '500ms-1s'},
-        {min: 1000, max: 5000, label: '1s-5s'},
-        {min: 5000, max: Infinity, label: '5s+'}
-    ];
-
-    const distribution = timeRanges.map(range => ({
-        label: range.label,
-        count: data.filter(q => 
-            q.execution_time && 
-            q.execution_time > range.min && 
-            q.execution_time <= range.max
-        ).length
-    }));
-
+function renderSummaryChart(data) {
+    const ctx = document.getElementById('summaryChart').getContext('2d');
     new Chart(ctx, {
-        type: 'bar',
+        type: 'doughnut',
         data: {
-            labels: distribution.map(d => d.label),
+            labels: ['Duration', 'Reads', 'Writes', 'Fetches'],
             datasets: [{
-                label: 'Query Count by Duration',
-                data: distribution.map(d => d.count),
+                data: [
+                    data.stats.totalDuration,
+                    data.stats.totalReads,
+                    data.stats.totalWrites,
+                    data.stats.totalFetches
+                ],
                 backgroundColor: [
-                    '#4CAF50',
-                    '#8BC34A',
-                    '#FFEB3B',
-                    '#FF9800',
-                    '#F44336'
+                    'rgba(255, 99, 132, 0.5)',
+                    'rgba(54, 162, 235, 0.5)',
+                    'rgba(255, 206, 86, 0.5)',
+                    'rgba(75, 192, 192, 0.5)'
                 ]
             }]
         },
         options: {
-            indexAxis: 'y',
             responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                x: {
-                    beginAtZero: true,
-                    grid: {
-                        display: false
-                    }
-                },
-                y: {
-                    grid: {
-                        display: false
-                    }
-                }
-            },
             plugins: {
                 legend: {
-                    display: false
+                    position: 'right'
+                },
+                title: {
+                    display: true,
+                    text: 'Query Execution Summary'
                 }
             }
         }
     });
 }
 
-function renderTableAccessChart(data, containerId) {
-    destroyChart(containerId);
-    const ctx = document.getElementById(containerId).getContext('2d');
-    const tableAccess = getMostAccessedTables(data);
-    const topTables = Object.entries(tableAccess)
-        .sort(([,a], [,b]) => b - a)
-        .slice(0, 10);
-
+function renderTimelineChart(data) {
+    const ctx = document.getElementById('timelineChart').getContext('2d');
     new Chart(ctx, {
-        type: 'bar',
+        type: 'line',
         data: {
-            labels: topTables.map(([table]) => table),
+            labels: data.timeline.map(item => item.time),
+            datasets: [
+                {
+                    label: 'Count',
+                    data: data.timeline.map(item => item.count),
+                    yAxisID: 'count',
+                    type: 'bar',
+                    backgroundColor: 'rgba(70, 130, 180, 0.3)',
+                    borderColor: 'rgb(70, 130, 180)'
+                },
+                {
+                    label: 'Duration',
+                    data: data.timeline.map(item => item.duration),
+                    yAxisID: 'duration',
+                    borderColor: 'rgb(165, 42, 42)',
+                    fill: false
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                count: {
+                    type: 'linear',
+                    position: 'left'
+                },
+                duration: {
+                    type: 'linear',
+                    position: 'right'
+                }
+            }
+        }
+    });
+}
+
+function renderPlanAnalysisChart(data) {
+    const ctx = document.getElementById('planAnalysisChart').getContext('2d');
+    new Chart(ctx, {
+        type: 'pie',
+        data: {
+            labels: Object.keys(data.planAnalysis),
             datasets: [{
-                label: 'Table Access Count',
-                data: topTables.map(([,count]) => count),
-                backgroundColor: '#36A2EB'
+                data: Object.values(data.planAnalysis).map(p => p.count),
+                backgroundColor: [
+                    'rgba(54, 162, 235, 0.5)',
+                    'rgba(255, 99, 132, 0.5)',
+                    'rgba(255, 206, 86, 0.5)'
+                ]
             }]
         },
         options: {
-            indexAxis: 'y',
             responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                x: {
-                    beginAtZero: true,
-                    grid: {
-                        display: false
-                    }
-                },
-                y: {
-                    grid: {
-                        display: false
-                    }
-                }
-            },
             plugins: {
                 legend: {
-                    display: false
+                    position: 'right'
+                },
+                title: {
+                    display: true,
+                    text: 'Execution Plan Distribution'
                 }
             }
         }

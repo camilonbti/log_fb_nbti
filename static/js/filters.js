@@ -12,33 +12,18 @@ function updateTypeFilter(statementTypes) {
         });
 }
 
-function updateTableFilter(tables) {
-    const tableFilter = document.getElementById('tableFilter');
-    tableFilter.innerHTML = '<option value="">All Tables</option>';
-    
-    tables.sort().forEach(table => {
-        const option = document.createElement('option');
-        option.value = table;
-        option.textContent = table;
-        tableFilter.appendChild(option);
-    });
-}
-
 function filterAndDisplayResults() {
     if (!logData) return;
 
     const timeFilter = parseInt(document.getElementById('timeFilter').value) || 0;
     const typeFilter = document.getElementById('typeFilter').value;
-    const tableFilter = document.getElementById('tableFilter').value;
+    const viewFilter = document.getElementById('viewFilter').value;
 
     const filteredData = logData.filter(record => {
         if (timeFilter && (!record.execution_time || record.execution_time < timeFilter)) {
             return false;
         }
         if (typeFilter && (!record.statement || !record.statement.trim().toUpperCase().startsWith(typeFilter))) {
-            return false;
-        }
-        if (tableFilter && (!record.tables || !record.tables.includes(tableFilter))) {
             return false;
         }
         return true;

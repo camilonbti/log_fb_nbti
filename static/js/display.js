@@ -8,7 +8,7 @@ function displayResults(data) {
     }
     
     if (!data || data.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="9" class="text-center py-4">No data available</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4">No data available</td></tr>';
         return;
     }
 
@@ -21,7 +21,6 @@ function displayResults(data) {
                 <td class="px-4 py-2">${record.timestamp || ''}</td>
                 <td class="px-4 py-2">${record.event || ''}</td>
                 <td class="px-4 py-2"><pre class="whitespace-pre-wrap text-sm">${record.statement || ''}</pre></td>
-                <td class="px-4 py-2">${record.tables ? record.tables.join(', ') : ''}</td>
                 <td class="px-4 py-2 ${record.execution_time > 1000 ? 'text-red-600 font-bold' : ''}">${record.execution_time || ''}</td>
                 <td class="px-4 py-2">
                     ${record.uses_index ? 

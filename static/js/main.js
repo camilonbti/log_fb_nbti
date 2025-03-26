@@ -1,25 +1,6 @@
 let logData = null;
 
-function renderCharts(data) {
-    console.log("Rendering charts with data:", data);
-    const chartsDiv = document.querySelector('.charts');
-    if (!chartsDiv) {
-        console.error("Charts container not found");
-        return;
-    }
-    
-    if (!data || data.length === 0) {
-        console.warn("No data available for charts");
-        chartsDiv.innerHTML = '<p class="text-center text-gray-500">No data available for visualization</p>';
-        return;
-    }
-
-    chartsDiv.style.display = 'block';
-    renderPerformanceChart(data, 'performanceChart');
-    renderTableAccessChart(data, 'tableAccessChart');
-}
-
-async function handleFormSubmit(e) {
+function handleFormSubmit(e) {
     e.preventDefault();
     console.log("Form submit triggered");
     
@@ -58,7 +39,6 @@ async function handleFormSubmit(e) {
             
             updateKPIs(logData);
             updateTypeFilter(result.stats.statement_types);
-            updateTableFilter(result.tables);
             renderCharts(logData);
             filterAndDisplayResults();
             
@@ -73,37 +53,6 @@ async function handleFormSubmit(e) {
     }
 }
 
-function filterAndDisplayResults() {
-    if (!logData) {
-        console.warn("No data available for filtering");
-        return;
-    }
-
-    const timeFilter = parseInt(document.getElementById('timeFilter').value) || 0;
-    const typeFilter = document.getElementById('typeFilter').value;
-    const tableFilter = document.getElementById('tableFilter').value;
-
-    console.log("Applying filters:", { timeFilter, typeFilter, tableFilter });
-
-    const filteredData = logData.filter(record => {
-        if (timeFilter && (!record.execution_time || record.execution_time < timeFilter)) {
-            return false;
-        }
-        if (typeFilter && (!record.statement || !record.statement.trim().toUpperCase().startsWith(typeFilter))) {
-            return false;
-        }
-        if (tableFilter && (!record.tables || !record.tables.includes(tableFilter))) {
-            return false;
-        }
-        return true;
-    });
-
-    console.log("Filtered data:", filteredData);
-    displayResults(filteredData);
-    updateKPIs(filteredData);
-    renderCharts(filteredData);
-}
-
 function initializeApp() {
     console.log("Initializing application");
     
@@ -116,12 +65,10 @@ function initializeApp() {
 
     const timeFilter = document.getElementById('timeFilter');
     const typeFilter = document.getElementById('typeFilter');
-    const tableFilter = document.getElementById('tableFilter');
     const viewFilter = document.getElementById('viewFilter');
 
     if (timeFilter) timeFilter.addEventListener('input', filterAndDisplayResults);
     if (typeFilter) typeFilter.addEventListener('change', filterAndDisplayResults);
-    if (tableFilter) tableFilter.addEventListener('change', filterAndDisplayResults);
     if (viewFilter) viewFilter.addEventListener('change', handleViewFilter);
     
     console.log("Event listeners initialized");

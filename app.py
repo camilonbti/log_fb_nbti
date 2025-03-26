@@ -3,6 +3,7 @@ import json
 import re
 from datetime import datetime
 import logging
+from collections import defaultdict
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -22,7 +23,7 @@ def extract_tables_from_statement(statement):
     tables = []
     parts = re.split(r'\s+(?:FROM|JOIN)\s+', statement.upper())
     for part in parts[1:] if parts else []:
-        table_name = part.split()[0].strip().strip('()')
+        table_name = part.split()[0].strip('()')
         if table_name and table_name not in ('SELECT', 'WHERE', 'GROUP', 'ORDER'):
             tables.append(table_name)
     
@@ -43,6 +44,8 @@ def parse_trace_log(log_data):
     
     parsed_data = []
     tables_set = set()
+    process_stats = defaultdict(lambda: {"count": 0, "duration": 0, "reads": 0, "writes": 0, "fetches": 0})
+    address_stats = defaultdict(lambda: {"count": 0, "duration": 0, "reads": 0, "writes": 0, "fetches": 0})
     
     for record in records:
         if record.get("StatementText"):
@@ -51,6 +54,9 @@ def parse_trace_log(log_data):
             tables = extract_tables_from_statement(statement)
             tables_set.update(tables)
             
+            process_name = record.get("ProcessName", "Unknown")
+            client_address = record.get("RemoteAddress", "Unknown")
+            
             parsed_record = {
                 "timestamp": record.get("TimeStamp"),
                 "event": record.get("Event"),
@@ -58,24 +64,39 @@ def parse_trace_log(log_data):
                 "execution_time": record.get("Time"),
                 "plan": plan,
                 "user": record.get("User"),
-                "process": record.get("ProcessName"),
+                "process": process_name,
                 "reads": record.get("Reads"),
                 "writes": record.get("Writes"),
                 "fetches": record.get("Fetches"),
                 "tables": tables,
-                "uses_index": check_index_usage(plan)
+                "uses_index": check_index_usage(plan),
+                "client_address": client_address
             }
+            
+            # Update process statistics
+            process_stats[process_name]["count"] += 1
+            process_stats[process_name]["duration"] += record.get("Time", 0) or 0
+            process_stats[process_name]["reads"] += record.get("Reads", 0) or 0
+            process_stats[process_name]["writes"] += record.get("Writes", 0) or 0
+            process_stats[process_name]["fetches"] += record.get("Fetches", 0) or 0
+            
+            # Update address statistics
+            address_stats[client_address]["count"] += 1
+            address_stats[client_address]["duration"] += record.get("Time", 0) or 0
+            address_stats[client_address]["reads"] += record.get("Reads", 0) or 0
+            address_stats[client_address]["writes"] += record.get("Writes", 0) or 0
+            address_stats[client_address]["fetches"] += record.get("Fetches", 0) or 0
+            
             parsed_data.append(parsed_record)
-            logger.debug(f"Parsed record: {json.dumps(parsed_record, indent=2)}")
     
     logger.info(f"Successfully parsed {len(parsed_data)} statements")
     logger.info(f"Found tables: {tables_set}")
     
-    return parsed_data, sorted(list(tables_set))
+    return parsed_data, sorted(list(tables_set)), dict(process_stats), dict(address_stats)
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return render_template('dashboard.html')
 
 @app.route('/analyze', methods=['POST'])
 def analyze():
@@ -96,7 +117,7 @@ def analyze():
             logger.error(f"Failed to parse JSON: {str(e)}")
             return jsonify({"success": False, "error": "Invalid JSON file"})
         
-        parsed_data, tables = parse_trace_log(log_data)
+        parsed_data, tables, process_stats, address_stats = parse_trace_log(log_data)
         
         total_queries = len(parsed_data)
         slow_queries = len([q for q in parsed_data if q["execution_time"] and q["execution_time"] > 1000])
@@ -117,7 +138,9 @@ def analyze():
                 "total_queries": total_queries,
                 "slow_queries": slow_queries,
                 "no_index_queries": no_index_queries,
-                "statement_types": statement_types
+                "statement_types": statement_types,
+                "process_stats": process_stats,
+                "address_stats": address_stats
             }
         }
         
