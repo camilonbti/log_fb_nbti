@@ -6,90 +6,80 @@
     <title>Firebird Log Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        .chart-container {
-            position: relative;
-            height: 300px;
-            width: 100%;
-            margin-bottom: 20px;
-        }
-        .detail-container {
-            height: 200px;
-            overflow-y: auto;
-            font-family: monospace;
-            white-space: pre;
-            padding: 10px;
-            border: 1px solid #ccc;
-            margin: 10px 0;
-        }
-    </style>
 </head>
 <body class="bg-gray-50 min-h-screen p-8">
     <div class="max-w-7xl mx-auto">
         <div class="flex justify-between items-center mb-8">
-            <h1 class="text-3xl font-bold">Firebird Log Analysis Dashboard</h1>
-            <p class="text-gray-600">Session ID: {{ session_id }}</p>
+            <h1 class="text-3xl font-bold">Firebird Log Dashboard</h1>
+            <a href="/" class="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600">
+                Back to Analyzer
+            </a>
         </div>
 
-        <!-- Summary Charts Row -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-            <div class="bg-white p-4 rounded-lg shadow">
-                <h2 class="text-xl font-semibold mb-4">Time Summary</h2>
-                <div class="chart-container">
-                    <canvas id="timeSummaryChart"></canvas>
+        <!-- Filters -->
+        <div id="filters" class="mb-8">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Execution Time (ms)</label>
+                    <input type="number" id="timeFilter" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
                 </div>
-            </div>
-            <div class="bg-white p-4 rounded-lg shadow">
-                <h2 class="text-xl font-semibold mb-4">Execution Frequency</h2>
-                <div class="chart-container">
-                    <canvas id="frequencyChart"></canvas>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Statement Type</label>
+                    <select id="typeFilter" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm"></select>
                 </div>
-            </div>
-        </div>
-
-        <!-- Performance Metrics Row -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-            <div class="bg-white p-4 rounded-lg shadow">
-                <h2 class="text-xl font-semibold mb-4">Duration Distribution</h2>
-                <div class="chart-container">
-                    <canvas id="durationChart"></canvas>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Table</label>
+                    <select id="tableFilter" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm"></select>
                 </div>
-            </div>
-            <div class="bg-white p-4 rounded-lg shadow">
-                <h2 class="text-xl font-semibold mb-4">Fetches Distribution</h2>
-                <div class="chart-container">
-                    <canvas id="fetchesChart"></canvas>
-                </div>
-            </div>
-            <div class="bg-white p-4 rounded-lg shadow">
-                <h2 class="text-xl font-semibold mb-4">Reads Distribution</h2>
-                <div class="chart-container">
-                    <canvas id="readsChart"></canvas>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">View</label>
+                    <select id="viewFilter" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                        <option value="">All Queries</option>
+                        <option value="slow">Slow Queries (>1s)</option>
+                        <option value="noindex">No Index Usage</option>
+                        <option value="top6">Top 6 Slowest</option>
+                    </select>
                 </div>
             </div>
         </div>
 
-        <!-- Timeline Chart -->
-        <div class="bg-white p-4 rounded-lg shadow mb-8">
-            <h2 class="text-xl font-semibold mb-4">Performance Timeline</h2>
-            <div class="chart-container" style="height: 400px;">
-                <canvas id="timelineChart"></canvas>
+        <!-- Charts -->
+        <div id="charts" class="mb-8 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="bg-white p-4 rounded-lg shadow">
+                <h3 class="text-lg font-semibold mb-4">Query Performance Distribution</h3>
+                <div class="chart-container">
+                    <canvas id="performanceChart"></canvas>
+                </div>
             </div>
-            <div class="flex justify-center">
-                <label class="inline-flex items-center">
-                    <input type="checkbox" id="collapseTimeline" class="form-checkbox">
-                    <span class="ml-2">Collapse timeline points</span>
-                </label>
+            <div class="bg-white p-4 rounded-lg shadow">
+                <h3 class="text-lg font-semibold mb-4">Most Accessed Tables</h3>
+                <div class="chart-container">
+                    <canvas id="tableAccessChart"></canvas>
+                </div>
             </div>
         </div>
 
-        <!-- Details Section -->
-        <div class="bg-white p-4 rounded-lg shadow">
-            <h2 class="text-xl font-semibold mb-4">Statement Details</h2>
-            <div id="detailsContainer" class="detail-container"></div>
+        <!-- Results Table -->
+        <div id="results" class="bg-white shadow-md rounded-lg overflow-hidden">
+            <table class="min-w-full">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Timestamp</th>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Event</th>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Statement</th>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time (ms)</th>
+                    </tr>
+                </thead>
+                <tbody id="resultsBody"></tbody>
+            </table>
         </div>
     </div>
 
+    <!-- Scripts -->
+    <script src="/static/js/utils.js"></script>
+    <script src="/static/js/charts.js"></script>
+    <script src="/static/js/filters.js"></script>
+    <script src="/static/js/display.js"></script>
     <script src="/static/js/dashboard.js"></script>
 </body>
 </html>

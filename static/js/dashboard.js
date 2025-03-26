@@ -1,84 +1,47 @@
-// Dashboard initialization
 let dashboardData = null;
 
-// Fetch data from backend
 async function loadDashboardData() {
     try {
-        const sessionId = new URL(window.location.href).pathname.split('/').pop();
-        const response = await fetch('/data', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                session_id: sessionId
-            })
-        });
-
-        if (!response.ok) {
-            throw new Error('Failed to load data');
-        }
-
+        const response = await fetch('/analyze/last');
         const result = await response.json();
+        
         if (result.success) {
             dashboardData = result.data;
-            renderDashboard();
+            
+            // Initialize filters
+            updateTypeFilter(result.stats.statement_types);
+            updateTableFilter(result.tables);
+            
+            // Display data
+            displayResults(dashboardData);
+            renderCharts(dashboardData);
+            
+            // Show sections
+            document.getElementById('filters').classList.remove('hidden');
+            document.getElementById('charts').classList.remove('hidden');
+            document.getElementById('results').classList.remove('hidden');
         } else {
-            throw new Error(result.error);
+            console.error('Error loading dashboard data:', result.error);
         }
     } catch (error) {
-        console.error('Error loading data:', error);
-        // Show error in UI
+        console.error('Error:', error);
     }
 }
 
-// Render all charts
-function renderDashboard() {
-    if (!dashboardData) return;
+function initializeDashboard() {
+    // Add event listeners for filters
+    const timeFilter = document.getElementById('timeFilter');
+    const typeFilter = document.getElementById('typeFilter');
+    const tableFilter = document.getElementById('tableFilter');
+    const viewFilter = document.getElementById('viewFilter');
 
-    renderTimeSummary();
-    renderFrequency();
-    renderDurationDistribution();
-    renderFetchesDistribution();
-    renderReadsDistribution(); 
-    renderTimeline();
+    if (timeFilter) timeFilter.addEventListener('input', filterAndDisplayResults);
+    if (typeFilter) typeFilter.addEventListener('change', filterAndDisplayResults);
+    if (tableFilter) tableFilter.addEventListener('change', filterAndDisplayResults);
+    if (viewFilter) viewFilter.addEventListener('change', handleViewFilter);
+
+    // Load initial data
+    loadDashboardData();
 }
 
-// Individual chart renderers
-function renderTimeSummary() {
-    const ctx = document.getElementById('timeSummaryChart').getContext('2d');
-    // Implement time summary pie chart
-}
-
-function renderFrequency() {
-    const ctx = document.getElementById('frequencyChart').getContext('2d');
-    // Implement frequency pie chart
-}
-
-function renderDurationDistribution() {
-    const ctx = document.getElementById('durationChart').getContext('2d');
-    // Implement duration bar chart
-}
-
-function renderFetchesDistribution() {
-    const ctx = document.getElementById('fetchesChart').getContext('2d');
-    // Implement fetches bar chart
-}
-
-function renderReadsDistribution() {
-    const ctx = document.getElementById('readsChart').getContext('2d');
-    // Implement reads bar chart
-}
-
-function renderTimeline() {
-    const ctx = document.getElementById('timelineChart').getContext('2d');
-    // Implement timeline line chart
-}
-
-// Event handlers
-document.getElementById('collapseTimeline')?.addEventListener('change', (e) => {
-    // Implement timeline collapse/expand
-});
-
-// Initialize dashboard
-document.addEventListener('DOMContentLoaded', loadDashboardData);
+document.addEventListener('DOMContentLoaded', initializeDashboard);

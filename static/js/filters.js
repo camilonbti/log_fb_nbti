@@ -1,10 +1,5 @@
 function updateTypeFilter(statementTypes) {
     const typeFilter = document.getElementById('typeFilter');
-    if (!typeFilter) {
-        console.warn('Type filter element not found');
-        return;
-    }
-    
     typeFilter.innerHTML = '<option value="">All Types</option>';
     
     Object.entries(statementTypes)
@@ -19,11 +14,6 @@ function updateTypeFilter(statementTypes) {
 
 function updateTableFilter(tables) {
     const tableFilter = document.getElementById('tableFilter');
-    if (!tableFilter) {
-        console.warn('Table filter element not found');
-        return;
-    }
-    
     tableFilter.innerHTML = '<option value="">All Tables</option>';
     
     tables.sort().forEach(table => {
@@ -35,16 +25,15 @@ function updateTableFilter(tables) {
 }
 
 function filterAndDisplayResults() {
-    if (!window.logData) {
-        console.warn('No log data available for filtering');
-        return;
-    }
+    if (!logData || !Array.isArray(logData)) return;
 
-    const timeFilter = parseInt(document.getElementById('timeFilter')?.value) || 0;
-    const typeFilter = document.getElementById('typeFilter')?.value || '';
-    const tableFilter = document.getElementById('tableFilter')?.value || '';
+    const timeFilter = parseInt(document.getElementById('timeFilter').value) || 0;
+    const typeFilter = document.getElementById('typeFilter').value;
+    const tableFilter = document.getElementById('tableFilter').value;
 
-    const filteredData = window.logData.filter(record => {
+    const filteredData = logData.filter(record => {
+        if (!record) return false;
+        
         if (timeFilter && (!record.execution_time || record.execution_time < timeFilter)) {
             return false;
         }
@@ -63,20 +52,17 @@ function filterAndDisplayResults() {
 }
 
 function handleViewFilter(e) {
-    if (!window.logData) {
-        console.warn('No log data available for view filtering');
-        return;
-    }
-
+    if (!logData || !Array.isArray(logData)) return;
+    
     const view = e.target.value;
-    let filteredData = [...window.logData];
+    let filteredData = [...logData];
 
     switch(view) {
         case 'slow':
-            filteredData = filteredData.filter(q => q.execution_time > 1000);
+            filteredData = filteredData.filter(q => q && q.execution_time > 1000);
             break;
         case 'noindex':
-            filteredData = filteredData.filter(q => !q.uses_index);
+            filteredData = filteredData.filter(q => q && !q.uses_index);
             break;
         case 'top6':
             filteredData = getTopSlowQueries(filteredData, 6);
@@ -87,9 +73,3 @@ function handleViewFilter(e) {
     updateKPIs(filteredData);
     renderCharts(filteredData);
 }
-
-// Export functions for use in other modules
-window.updateTableFilter = updateTableFilter;
-window.updateTypeFilter = updateTypeFilter;
-window.filterAndDisplayResults = filterAndDisplayResults;
-window.handleViewFilter = handleViewFilter;

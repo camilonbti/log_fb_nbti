@@ -5,86 +5,62 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Firebird Log Analyzer</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        .log-container {
-            font-family: monospace;
-            height: 200px;
-            overflow-y: auto;
-        }
-        .log-entry {
-            padding: 2px 4px;
-            margin: 1px 0;
-        }
-        .log-info { background-color: #e8f4f8; }
-        .log-error { background-color: #fee2e2; }
-        .log-success { background-color: #dcfce7; }
-        .log-warning { background-color: #fef3c7; }
-    </style>
 </head>
 <body class="bg-gray-50 min-h-screen p-8">
     <div class="max-w-7xl mx-auto">
         <h1 class="text-3xl font-bold mb-8">Firebird Log Analyzer</h1>
 
-        <!-- Initial Section -->
-        <div id="initialSection">
-            <!-- Upload Form -->
-            <form id="uploadForm" class="mb-8">
-                <div class="flex gap-4">
-                    <input type="file" id="logFile" accept=".json" required class="border p-2 rounded">
-                    <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
-                        Analyze Log
-                    </button>
-                    <button type="button" id="dashboardBtn" disabled 
-                            class="bg-gray-400 text-white px-4 py-2 rounded hover:bg-gray-500 disabled:opacity-50 disabled:cursor-not-allowed">
-                        Dashboard
-                    </button>
-                </div>
-            </form>
-
-            <!-- Progress Section -->
-            <div id="progressSection" class="mb-8 hidden">
-                <div class="bg-white p-4 rounded-lg shadow">
-                    <h3 class="text-lg font-semibold mb-2">Processing Progress</h3>
-                    <div class="w-full bg-gray-200 rounded-full h-2.5">
-                        <div id="progressBar" class="bg-blue-600 h-2.5 rounded-full" style="width: 0%"></div>
-                    </div>
-                    <p id="progressText" class="mt-2 text-sm text-gray-600">Preparing to process...</p>
-                </div>
+        <!-- Upload Form -->
+        <form id="uploadForm" class="mb-8">
+            <div class="flex gap-4">
+                <input type="file" id="logFile" accept=".json" required class="border p-2 rounded">
+                <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+                    Analyze Log
+                </button>
+                <a href="dashboard.html" class="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600">
+                    Dashboard
+                </a>
             </div>
+        </form>
 
-            <!-- Log Section -->
-            <div id="logSection" class="mb-8">
-                <div class="bg-white p-4 rounded-lg shadow">
-                    <h3 class="text-lg font-semibold mb-2">Processing Log</h3>
-                    <div id="logContainer" class="log-container border rounded p-2"></div>
-                </div>
+        <!-- Progress Bar -->
+        <div id="progress" class="mb-8 hidden">
+            <h2 class="text-lg font-semibold mb-2">Processing Progress</h2>
+            <div class="w-full bg-gray-200 rounded-full h-2.5">
+                <div id="progressBar" class="bg-blue-600 h-2.5 rounded-full" style="width: 0%"></div>
             </div>
+            <p id="progressText" class="mt-2 text-sm text-gray-600">Processing: 0 of 0 records (0%)</p>
+        </div>
 
-            <!-- Summary Section -->
-            <div id="summarySection" class="mb-8 hidden">
-                <div class="bg-white p-4 rounded-lg shadow">
-                    <h3 class="text-lg font-semibold mb-4">Processing Summary</h3>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div class="p-3 bg-blue-50 rounded">
-                            <p class="text-sm text-blue-600">Total Records</p>
-                            <p id="totalRecords" class="text-2xl font-bold">0</p>
-                        </div>
-                        <div class="p-3 bg-green-50 rounded">
-                            <p class="text-sm text-green-600">Successful</p>
-                            <p id="successfulRecords" class="text-2xl font-bold">0</p>
-                        </div>
-                        <div class="p-3 bg-red-50 rounded">
-                            <p class="text-sm text-red-600">Errors</p>
-                            <p id="errorRecords" class="text-2xl font-bold">0</p>
-                        </div>
-                    </div>
+        <!-- Processing Log -->
+        <div id="processingLog" class="mb-8">
+            <h2 class="text-lg font-semibold mb-2">Processing Log</h2>
+            <div class="bg-black text-white p-4 rounded-lg h-48 overflow-y-auto font-mono text-sm">
+                <pre id="logContent"></pre>
+            </div>
+        </div>
+
+        <!-- Processing Summary -->
+        <div id="summary" class="mb-8 hidden">
+            <h2 class="text-lg font-semibold mb-4">Processing Summary</h2>
+            <div class="grid grid-cols-3 gap-4">
+                <div class="bg-blue-50 p-4 rounded-lg">
+                    <h3 class="text-sm font-medium text-blue-800">Total Records</h3>
+                    <p id="totalRecords" class="mt-1 text-2xl font-semibold text-blue-900">0</p>
+                </div>
+                <div class="bg-green-50 p-4 rounded-lg">
+                    <h3 class="text-sm font-medium text-green-800">Successful</h3>
+                    <p id="successfulRecords" class="mt-1 text-2xl font-semibold text-green-900">0</p>
+                </div>
+                <div class="bg-red-50 p-4 rounded-lg">
+                    <h3 class="text-sm font-medium text-red-800">Errors</h3>
+                    <p id="errorRecords" class="mt-1 text-2xl font-semibold text-red-900">0</p>
                 </div>
             </div>
         </div>
     </div>
 
     <!-- Scripts -->
-    <script src="/static/js/logger.js"></script>
     <script src="/static/js/main.js"></script>
 </body>
 </html>
