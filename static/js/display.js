@@ -1,13 +1,25 @@
 function displayResults(data) {
+    console.log("Displaying results:", data);
     const tbody = document.getElementById('resultsBody');
+    
+    if (!tbody) {
+        console.error("Results table body not found");
+        return;
+    }
+    
+    if (!data || data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="9" class="text-center py-4">No data available</td></tr>';
+        return;
+    }
+
     tbody.innerHTML = data.map(record => {
         const rowClass = record.execution_time > 1000 ? 'bg-red-50' : 
                         !record.uses_index ? 'bg-yellow-50' : '';
         
         return `
             <tr class="border-b hover:bg-gray-50 ${rowClass}">
-                <td class="px-4 py-2">${record.timestamp}</td>
-                <td class="px-4 py-2">${record.event}</td>
+                <td class="px-4 py-2">${record.timestamp || ''}</td>
+                <td class="px-4 py-2">${record.event || ''}</td>
                 <td class="px-4 py-2"><pre class="whitespace-pre-wrap text-sm">${record.statement || ''}</pre></td>
                 <td class="px-4 py-2">${record.tables ? record.tables.join(', ') : ''}</td>
                 <td class="px-4 py-2 ${record.execution_time > 1000 ? 'text-red-600 font-bold' : ''}">${record.execution_time || ''}</td>
@@ -24,13 +36,14 @@ function displayResults(data) {
     }).join('');
 }
 
-function showAnalysisResults() {
-    document.getElementById('filters').classList.remove('hidden');
-    document.getElementById('kpis').classList.remove('hidden');
-    document.getElementById('results').classList.remove('hidden');
-}
-
 function updateKPIs(data) {
+    console.log("Updating KPIs with data:", data);
+    
+    if (!data || data.length === 0) {
+        console.warn("No data available for KPIs");
+        return;
+    }
+
     const queries = data.filter(q => q.statement);
     const executionTimes = queries.map(q => q.execution_time || 0);
     const maxTime = Math.max(...executionTimes);
@@ -43,13 +56,22 @@ function updateKPIs(data) {
     const totalWrites = queries.reduce((sum, q) => sum + (parseInt(q.writes) || 0), 0);
     const totalFetches = queries.reduce((sum, q) => sum + (parseInt(q.fetches) || 0), 0);
 
-    document.getElementById('totalQueries').textContent = formatNumber(queries.length);
-    document.getElementById('avgExecTime').textContent = formatDuration(avgTime);
-    document.getElementById('maxExecTime').textContent = formatDuration(maxTime);
-    document.getElementById('slowQueries').textContent = formatNumber(slowQueries);
-    document.getElementById('noIndexQueries').textContent = formatNumber(noIndexQueries);
-    document.getElementById('indexUsageRate').textContent = `${indexUsageRate.toFixed(1)}%`;
-    document.getElementById('totalReads').textContent = formatNumber(totalReads);
-    document.getElementById('totalWrites').textContent = formatNumber(totalWrites);
-    document.getElementById('totalFetches').textContent = formatNumber(totalFetches);
+    updateElement('totalQueries', formatNumber(queries.length));
+    updateElement('avgExecTime', formatDuration(avgTime));
+    updateElement('maxExecTime', formatDuration(maxTime));
+    updateElement('slowQueries', formatNumber(slowQueries));
+    updateElement('noIndexQueries', formatNumber(noIndexQueries));
+    updateElement('indexUsageRate', `${indexUsageRate.toFixed(1)}%`);
+    updateElement('totalReads', formatNumber(totalReads));
+    updateElement('totalWrites', formatNumber(totalWrites));
+    updateElement('totalFetches', formatNumber(totalFetches));
+}
+
+function updateElement(id, value) {
+    const element = document.getElementById(id);
+    if (element) {
+        element.textContent = value;
+    } else {
+        console.error(`Element with id '${id}' not found`);
+    }
 }

@@ -2,6 +2,11 @@ from flask import Flask, render_template, request, jsonify
 import json
 import re
 from datetime import datetime
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
@@ -9,6 +14,7 @@ def extract_tables_from_statement(statement):
     if not statement:
         return []
     
+    logger.debug(f"Extracting tables from statement: {statement}")
     statement = re.sub(r'--.*$', '', statement, flags=re.MULTILINE)
     statement = re.sub(r'/\*.*?\*/', '', statement, flags=re.DOTALL)
     statement = ' '.join(statement.split())
@@ -20,6 +26,7 @@ def extract_tables_from_statement(statement):
         if table_name and table_name not in ('SELECT', 'WHERE', 'GROUP', 'ORDER'):
             tables.append(table_name)
     
+    logger.debug(f"Extracted tables: {tables}")
     return list(set(tables))
 
 def check_index_usage(plan):
@@ -28,7 +35,12 @@ def check_index_usage(plan):
     return 'INDEX' in plan.upper()
 
 def parse_trace_log(log_data):
+    logger.info("Starting to parse trace log")
+    logger.debug(f"Input log data: {json.dumps(log_data, indent=2)}")
+    
     records = log_data.get("RecordSet", [])
+    logger.info(f"Found {len(records)} records in log")
+    
     parsed_data = []
     tables_set = set()
     
@@ -54,6 +66,10 @@ def parse_trace_log(log_data):
                 "uses_index": check_index_usage(plan)
             }
             parsed_data.append(parsed_record)
+            logger.debug(f"Parsed record: {json.dumps(parsed_record, indent=2)}")
+    
+    logger.info(f"Successfully parsed {len(parsed_data)} statements")
+    logger.info(f"Found tables: {tables_set}")
     
     return parsed_data, sorted(list(tables_set))
 
@@ -64,8 +80,22 @@ def index():
 @app.route('/analyze', methods=['POST'])
 def analyze():
     try:
+        logger.info("Received analyze request")
+        
+        if 'log_file' not in request.files:
+            logger.error("No log file in request")
+            return jsonify({"success": False, "error": "No file uploaded"})
+            
         log_file = request.files['log_file']
-        log_data = json.load(log_file)
+        logger.info(f"Processing file: {log_file.filename}")
+        
+        try:
+            log_data = json.load(log_file)
+            logger.debug("Successfully loaded JSON data")
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse JSON: {str(e)}")
+            return jsonify({"success": False, "error": "Invalid JSON file"})
+        
         parsed_data, tables = parse_trace_log(log_data)
         
         total_queries = len(parsed_data)
@@ -79,7 +109,7 @@ def analyze():
                 stmt_type = stmt.strip().split()[0].upper()
                 statement_types[stmt_type] = statement_types.get(stmt_type, 0) + 1
         
-        return jsonify({
+        response_data = {
             "success": True,
             "data": parsed_data,
             "tables": tables,
@@ -89,8 +119,13 @@ def analyze():
                 "no_index_queries": no_index_queries,
                 "statement_types": statement_types
             }
-        })
+        }
+        
+        logger.info(f"Analysis complete. Found {total_queries} queries, {slow_queries} slow queries")
+        return jsonify(response_data)
+        
     except Exception as e:
+        logger.error(f"Error processing request: {str(e)}", exc_info=True)
         return jsonify({"success": False, "error": str(e)})
 
 if __name__ == '__main__':
