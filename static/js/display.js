@@ -6,8 +6,8 @@ function displayResults(data) {
         
         return `
             <tr class="border-b hover:bg-gray-50 ${rowClass}">
-                <td class="px-4 py-2">${record.timestamp}</td>
-                <td class="px-4 py-2">${record.event}</td>
+                <td class="px-4 py-2">${record.timestamp || ''}</td>
+                <td class="px-4 py-2">${record.event || ''}</td>
                 <td class="px-4 py-2"><pre class="whitespace-pre-wrap text-sm">${record.statement || ''}</pre></td>
                 <td class="px-4 py-2">${record.tables ? record.tables.join(', ') : ''}</td>
                 <td class="px-4 py-2 ${record.execution_time > 1000 ? 'text-red-600 font-bold' : ''}">${record.execution_time || ''}</td>
@@ -28,9 +28,12 @@ function showAnalysisResults() {
     document.getElementById('filters').classList.remove('hidden');
     document.getElementById('kpis').classList.remove('hidden');
     document.getElementById('results').classList.remove('hidden');
+    document.getElementById('pagination').classList.remove('hidden');
 }
 
 function updateKPIs(data) {
+    if (!data || !data.length) return;
+
     const queries = data.filter(q => q.statement);
     const executionTimes = queries.map(q => q.execution_time || 0);
     const maxTime = Math.max(...executionTimes);
