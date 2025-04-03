@@ -4,7 +4,7 @@ function formatNumber(num) {
 
 function formatDuration(ms) {
     if (ms < 1000) return `${ms}ms`;
-    return `${(ms/1000).toFixed(2)}s`;
+    return `${(ms/1000).toFixed(2)}s`;   
 }
 
 function calculateAverageTime(queries) {
