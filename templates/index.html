@@ -6,6 +6,8 @@
     <title>Firebird Log Analyzer</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/date-fns@2.29.3/index.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
     <style>
         .chart-container {
             height: 400px;
@@ -49,27 +51,36 @@
 
         <!-- Filters Section -->
         <div id="filters" class="mb-8 hidden">
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700">Execution Time (ms)</label>
-                    <input type="number" id="timeFilter" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+            <div class="grid grid-cols-1 gap-4">
+                <!-- Event Filter -->
+                <div class="bg-white p-4 rounded-lg shadow">
+                    <h3 class="text-lg font-semibold mb-2">Event Types</h3>
+                    <div id="eventFilter" class="border rounded-lg"></div>
                 </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700">Statement Type</label>
-                    <select id="typeFilter" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm"></select>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700">Table</label>
-                    <select id="tableFilter" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm"></select>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700">View</label>
-                    <select id="viewFilter" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
-                        <option value="">All Queries</option>
-                        <option value="slow">Slow Queries (>1s)</option>
-                        <option value="noindex">No Index Usage</option>
-                        <option value="top6">Top 6 Slowest</option>
-                    </select>
+
+                <!-- Other Filters -->
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Execution Time (ms)</label>
+                        <input type="number" id="timeFilter" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Statement Type</label>
+                        <select id="typeFilter" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm"></select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Table</label>
+                        <select id="tableFilter" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm"></select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">View</label>
+                        <select id="viewFilter" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                            <option value="">All Queries</option>
+                            <option value="slow">Slow Queries (>1s)</option>
+                            <option value="noindex">No Index Usage</option>
+                            <option value="top6">Top 6 Slowest</option>
+                        </select>
+                    </div>
                 </div>
             </div>
         </div>
@@ -128,6 +139,18 @@
                 <h3 class="text-lg font-semibold mb-4">Most Accessed Tables</h3>
                 <div class="chart-container">
                     <canvas id="tableAccessChart"></canvas>
+                </div>
+            </div>
+            <div class="bg-white p-4 rounded-lg shadow">
+                <h3 class="text-lg font-semibold mb-4">Query Types Distribution</h3>
+                <div class="chart-container">
+                    <canvas id="queryTypeChart"></canvas>
+                </div>
+            </div>
+            <div class="bg-white p-4 rounded-lg shadow">
+                <h3 class="text-lg font-semibold mb-4">Query Timeline</h3>
+                <div class="chart-container">
+                    <canvas id="timelineChart"></canvas>
                 </div>
             </div>
         </div>

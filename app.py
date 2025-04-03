@@ -8,6 +8,19 @@ import os
 import tempfile
 import codecs
 import ijson
+import logging
+import sys
+import traceback
+
+# Configuração do logging
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 1024 * 1024 * 1024  # 1GB
@@ -44,37 +57,68 @@ def check_index_usage(plan):
 
 def process_record(record):
     """Processa um registro individual, garantindo valores numéricos válidos"""
-    return {
-        'timestamp': record.get('TimeStamp', ''),
-        'event': record.get('Event', ''),
-        'statement': record.get('StatementText', ''),
-        'tables': extract_tables_from_statement(record.get('StatementText', '')),
-        'execution_time': safe_int(record.get('Time')),
-        'plan': record.get('StatementPlan', ''),
-        'user': record.get('User', ''),
-        'process': record.get('ProcessName', ''),
-        'reads': safe_int(record.get('Reads')),
-        'writes': safe_int(record.get('Writes')),
-        'fetches': safe_int(record.get('Fetches')),
-        'uses_index': check_index_usage(record.get('StatementPlan', ''))
-    }
+    try:
+        logger.debug(f"Processing record: {record.get('Event')}")
+        processed = {
+            'timestamp': record.get('TimeStamp', ''),
+            'event': record.get('Event', ''),
+            'statement': record.get('StatementText', ''),
+            'tables': extract_tables_from_statement(record.get('StatementText', '')),
+            'execution_time': safe_int(record.get('Time')),
+            'plan': record.get('StatementPlan', ''),
+            'user': record.get('User', ''),
+            'process': record.get('ProcessName', ''),
+            'reads': safe_int(record.get('Reads')),
+            'writes': safe_int(record.get('Writes')),
+            'fetches': safe_int(record.get('Fetches')),
+            'uses_index': check_index_usage(record.get('StatementPlan', ''))
+        }
+        return processed
+    except Exception as e:
+        logger.error(f"Error processing record: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise
 
 def parse_trace_log(log_data):
     """Processa os registros do log"""
-    if not isinstance(log_data, dict) or 'RecordSet' not in log_data:
-        return [], []
+    try:
+        logger.info("Starting log parsing")
+        logger.debug(f"Log data type: {type(log_data)}")
+        
+        if not isinstance(log_data, dict) or 'RecordSet' not in log_data:
+            logger.error("Invalid log data format")
+            return [], []
 
-    records = log_data['RecordSet']
-    tables_set = set()
-    parsed_data = []
+        records = log_data['RecordSet']
+        logger.info(f"Total records found: {len(records)}")
+        
+        tables_set = set()
+        parsed_data = []
 
-    for record in records:
-        if record.get('StatementText'):
-            processed_record = process_record(record)
-            tables_set.update(processed_record['tables'])
-            parsed_data.append(processed_record)
+        for i, record in enumerate(records):
+            try:
+                if record.get('StatementText'):
+                    processed_record = process_record(record)
+                    tables_set.update(processed_record['tables'])
+                    parsed_data.append(processed_record)
+                
+                if i % 1000 == 0:  # Log progress every 1000 records
+                    logger.debug(f"Processed {i} records...")
+                    
+            except Exception as e:
+                logger.error(f"Error processing record {i}: {str(e)}")
+                logger.error(traceback.format_exc())
+                continue
 
-    return parsed_data, sorted(list(tables_set))
+        logger.info(f"Successfully parsed {len(parsed_data)} records")
+        logger.info(f"Found {len(tables_set)} unique tables")
+        
+        return parsed_data, sorted(list(tables_set))
+        
+    except Exception as e:
+        logger.error(f"Error parsing trace log: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise
 
 @app.route('/')
 def index():
@@ -83,26 +127,43 @@ def index():
 @app.route('/analyze', methods=['POST'])
 def analyze():
     try:
+        logger.info("Starting log analysis")
+        
         if 'log_file' not in request.files:
+            logger.error("No file provided")
             return jsonify({"success": False, "error": "No file provided"})
         
         log_file = request.files['log_file']
         if not log_file:
+            logger.error("No file selected")
             return jsonify({"success": False, "error": "No file selected"})
         
         filename = secure_filename(log_file.filename)
         temp_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        
+        logger.info(f"Saving file to temporary path: {temp_path}")
+        logger.debug(f"File size: {os.fstat(log_file.fileno()).st_size} bytes")
+        
         log_file.save(temp_path)
         
         try:
+            logger.info("Reading JSON file")
             with open(temp_path, 'r', encoding='utf-8-sig') as f:
-                log_data = json.load(f)
+                try:
+                    log_data = json.load(f)
+                    logger.info("JSON file loaded successfully")
+                except json.JSONDecodeError as je:
+                    logger.error(f"JSON decode error: {str(je)}")
+                    return jsonify({"success": False, "error": f"Invalid JSON format: {str(je)}"})
             
+            logger.info("Starting trace log parsing")
             parsed_data, tables = parse_trace_log(log_data)
             
             total_queries = len(parsed_data)
             slow_queries = len([q for q in parsed_data if q['execution_time'] > 1000])
             no_index_queries = len([q for q in parsed_data if not q['uses_index'] and q['statement']])
+            
+            logger.info(f"Analysis complete: {total_queries} queries, {slow_queries} slow queries, {no_index_queries} no index queries")
             
             statement_types = {}
             for record in parsed_data:
@@ -123,17 +184,21 @@ def analyze():
                 }
             }
             
+            logger.info("Sending response")
             return jsonify(response_data)
             
         except Exception as e:
-            print(f"Error processing file: {str(e)}")
+            logger.error(f"Error processing file: {str(e)}")
+            logger.error(traceback.format_exc())
             return jsonify({"success": False, "error": str(e)})
         finally:
             if os.path.exists(temp_path):
                 os.remove(temp_path)
+                logger.debug("Temporary file removed")
             
     except Exception as e:
-        print(f"Error in analyze endpoint: {str(e)}")
+        logger.error(f"Error in analyze endpoint: {str(e)}")
+        logger.error(traceback.format_exc())
         return jsonify({"success": False, "error": str(e)})
 
 if __name__ == '__main__':

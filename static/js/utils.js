@@ -1,3 +1,11 @@
+function safe_int(value, default_value = 0) {
+    try {
+        return parseInt(value) || default_value;
+    } catch {
+        return default_value;
+    }
+}
+
 function formatNumber(num) {
     return new Intl.NumberFormat().format(num);
 }
@@ -10,7 +18,7 @@ function formatDuration(ms) {
 function calculateAverageTime(queries) {
     if (!queries.length) return 0;
     const totalTime = queries.reduce((sum, q) => sum + (q.execution_time || 0), 0);
-    return totalTime / queries.length;
+    return Math.round(totalTime / queries.length);
 }
 
 function getTopSlowQueries(queries, limit = 6) {
@@ -29,9 +37,7 @@ function getMostAccessedTables(queries) {
             });
         }
     });
-    return Object.entries(tableCounts)
-        .sort(([,a], [,b]) => b - a)
-        .reduce((obj, [key, value]) => ({...obj, [key]: value}), {});
+    return tableCounts;
 }
 
 function getQueryTypeDistribution(queries) {
