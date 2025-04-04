@@ -10,7 +10,7 @@ let activeFilters = {
 // Elemento para mostrar filtros ativos
 const activeFiltersContainer = document.createElement('div');
 activeFiltersContainer.className = 'flex flex-wrap gap-2 p-4 bg-gray-50 rounded-lg mb-4';
-document.querySelector('#filters').insertBefore(activeFiltersContainer, document.querySelector('#filters').firstChild);
+document.querySelector('#filters')?.insertBefore(activeFiltersContainer, document.querySelector('#filters').firstChild);
 
 function updateActiveFiltersDisplay() {
     activeFiltersContainer.innerHTML = '';
@@ -79,7 +79,7 @@ function updateActiveFiltersDisplay() {
     }
 }
 
-function removeFilter(type, value) {
+async function removeFilter(type, value) {
     switch(type) {
         case 'time':
             activeFilters.time = 0;
@@ -103,10 +103,10 @@ function removeFilter(type, value) {
             break;
     }
     
-    filterAndDisplayResults();
+    await filterAndDisplayResults();
 }
 
-function clearAllFilters() {
+async function clearAllFilters() {
     activeFilters = {
         time: 0,
         types: new Set(),
@@ -126,71 +126,93 @@ function clearAllFilters() {
         cb.checked = false;
     });
 
-    filterAndDisplayResults();
+    await filterAndDisplayResults();
 }
 
-function filterAndDisplayResults() {
-    if (!window.logData) return;
-
-    let filteredData = [...window.logData];
-
-    // Aplicar filtros em sequência
-    if (activeFilters.events.size > 0) {
-        filteredData = filteredData.filter(record => 
-            record.event && activeFilters.events.has(record.event)
-        );
+async function filterAndDisplayResults() {
+    if (!window.logData) {
+        Logger.warn('No data available for filtering');
+        return;
     }
 
-    if (activeFilters.time > 0) {
-        filteredData = filteredData.filter(record => 
-            record.execution_time && record.execution_time >= activeFilters.time
-        );
-    }
-
-    if (activeFilters.types.size > 0) {
-        filteredData = filteredData.filter(record => 
-            record.statement && Array.from(activeFilters.types).some(type => 
-                record.statement.trim().toUpperCase().startsWith(type)
-            )
-        );
-    }
-
-    if (activeFilters.tables.size > 0) {
-        filteredData = filteredData.filter(record => 
-            record.tables && Array.from(activeFilters.tables).some(table => 
-                record.tables.includes(table)
-            )
-        );
-    }
-
-    switch(activeFilters.view) {
-        case 'slow':
-            filteredData = filteredData.filter(q => q.execution_time > 1000);
-            break;
-        case 'noindex':
-            filteredData = filteredData.filter(q => !q.uses_index);
-            break;
-        case 'top6':
-            filteredData.sort((a, b) => (b.execution_time || 0) - (a.execution_time || 0));
-            filteredData = filteredData.slice(0, 6);
-            break;
-    }
-
-    // Atualizar display de filtros ativos
-    updateActiveFiltersDisplay();
-
-    // Resetar paginação ao filtrar
-    window.currentPage = 0;
+    Logger.info('Iniciando filtragem de dados');
     
-    // Atualizar visualização
-    displayResults(filteredData);
-    updateKPIs(filteredData);
-    renderCharts(filteredData);
+    try {
+        // Criar cópia dos dados originais
+        let filteredData = [...window.logData];
+        
+        // Aplicar filtros em sequência
+        if (activeFilters.events.size > 0) {
+            filteredData = filteredData.filter(record => 
+                record.event && activeFilters.events.has(record.event)
+            );
+        }
+
+        if (activeFilters.time > 0) {
+            filteredData = filteredData.filter(record => 
+                record.execution_time && record.execution_time >= activeFilters.time
+            );
+        }
+
+        if (activeFilters.types.size > 0) {
+            filteredData = filteredData.filter(record => 
+                record.statement && Array.from(activeFilters.types).some(type => 
+                    record.statement.trim().toUpperCase().startsWith(type)
+                )
+            );
+        }
+
+        if (activeFilters.tables.size > 0) {
+            filteredData = filteredData.filter(record => 
+                record.tables && Array.from(activeFilters.tables).some(table => 
+                    record.tables.includes(table)
+                )
+            );
+        }
+
+        switch(activeFilters.view) {
+            case 'slow':
+                filteredData = filteredData.filter(q => q.execution_time > 1000);
+                break;
+            case 'noindex':
+                filteredData = filteredData.filter(q => !q.uses_index);
+                break;
+            case 'top6':
+                filteredData.sort((a, b) => (b.execution_time || 0) - (a.execution_time || 0));
+                filteredData = filteredData.slice(0, 6);
+                break;
+        }
+
+        Logger.info(`Dados filtrados: ${filteredData.length} registros`);
+
+        // Atualizar estado global
+        window.filteredData = filteredData;
+        
+        // Atualizar display de filtros ativos
+        updateActiveFiltersDisplay();
+
+        // Resetar paginação
+        window.currentPage = 0;
+
+        // Atualizar visualizações de forma assíncrona
+        await Promise.all([
+            updateKPIs(filteredData),
+            renderCharts(filteredData),
+            displayResults(getCurrentPageData())
+        ]);
+
+        await updatePaginationInfo();
+        
+        Logger.info('Atualização de visualizações concluída');
+    } catch (error) {
+        Logger.error('Erro ao filtrar e exibir resultados', error);
+        throw error;
+    }
 }
 
-function handleViewFilter(e) {
+async function handleViewFilter(e) {
     activeFilters.view = e.target.value;
-    filterAndDisplayResults();
+    await filterAndDisplayResults();
 }
 
 function updateEventFilter(data) {
@@ -225,13 +247,13 @@ function updateEventFilter(data) {
             `;
             
             const checkbox = wrapper.querySelector('input');
-            checkbox.addEventListener('change', () => {
+            checkbox.addEventListener('change', async () => {
                 if (checkbox.checked) {
                     activeFilters.events.add(event);
                 } else {
                     activeFilters.events.delete(event);
                 }
-                filterAndDisplayResults();
+                await filterAndDisplayResults();
             });
             
             container.appendChild(wrapper);
@@ -257,11 +279,11 @@ function updateTypeFilter(statementTypes) {
             typeFilter.appendChild(option);
         });
 
-    typeFilter.addEventListener('change', (e) => {
+    typeFilter.addEventListener('change', async (e) => {
         const value = e.target.value;
         activeFilters.types.clear();
         if (value) activeFilters.types.add(value);
-        filterAndDisplayResults();
+        await filterAndDisplayResults();
     });
 }
 
@@ -279,11 +301,11 @@ function updateTableFilter(tables) {
         tableFilter.appendChild(option);
     });
 
-    tableFilter.addEventListener('change', (e) => {
+    tableFilter.addEventListener('change', async (e) => {
         const value = e.target.value;
         activeFilters.tables.clear();
         if (value) activeFilters.tables.add(value);
-        filterAndDisplayResults();
+        await filterAndDisplayResults();
     });
 }
 

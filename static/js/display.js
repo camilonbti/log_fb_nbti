@@ -17,6 +17,8 @@ async function displayResults(data) {
     }
 
     try {
+        Logger.info(`Exibindo ${data.length} registros`);
+        
         // Limpar tbody antes de adicionar novos dados
         tbody.innerHTML = '';
 
@@ -90,6 +92,8 @@ async function displayResults(data) {
             // Permitir que a UI atualize
             await new Promise(resolve => setTimeout(resolve, 0));
         }
+
+        Logger.info('Registros exibidos com sucesso');
 
     } catch (error) {
         Logger.error('Error displaying results', error);

@@ -8,7 +8,7 @@ const CHUNK_SIZE = 1000;
 // Gerenciamento de dados
 function getCurrentPageData() {
     const start = currentPage * pageSize;
-    return filteredData.slice(start, start + pageSize);
+    return window.filteredData.slice(start, start + pageSize);
 }
 
 function processDataInChunks(data, chunkSize = CHUNK_SIZE) {
@@ -30,37 +30,37 @@ async function processResponse(response) {
         }
 
         // Resetar estado
-        logData = [];
-        filteredData = [];
+        window.logData = [];
+        window.filteredData = [];
         currentPage = 0;
 
         // 1. Carregar dados
         Logger.info('Stage: Loading data');
-        logData = data.data || [];
-        filteredData = [...logData];
-        Logger.info(`Loaded ${logData.length} records`);
+        window.logData = data.data || [];
+        window.filteredData = [...window.logData];
+        Logger.info(`Loaded ${window.logData.length} records`);
         
         // 2. Mostrar containers
         showAnalysisResults();
 
         // 3. Processar dados em chunks
         Logger.info('Stage: Processing data');
-        const chunks = await processDataInChunks(logData);
+        const chunks = await processDataInChunks(window.logData);
         Logger.info(`Split data into ${chunks.length} chunks`);
 
         // 4. Atualizar filtros
         Logger.info('Stage: Updating filters');
-        await updateEventFilter(logData);
+        await updateEventFilter(window.logData);
         await updateTypeFilter(data.stats?.statement_types || {});
         await updateTableFilter(data.tables || []);
 
         // 5. Calcular e atualizar KPIs
         Logger.info('Stage: Updating KPIs');
-        await calculateAndUpdateKPIs(filteredData);
+        await updateKPIs(window.filteredData);
 
         // 6. Renderizar gráficos
         Logger.info('Stage: Rendering charts');
-        await renderCharts(filteredData);
+        await renderCharts(window.filteredData);
 
         // 7. Exibir resultados e paginação
         Logger.info('Stage: Displaying results');
@@ -193,19 +193,19 @@ async function handleFormSubmit(e) {
 }
 
 async function updatePaginationInfo() {
-    if (!filteredData.length) {
+    if (!window.filteredData.length) {
         Logger.debug('No data for pagination');
         return;
     }
 
-    const totalPages = Math.ceil(filteredData.length / pageSize);
+    const totalPages = Math.ceil(window.filteredData.length / pageSize);
     const start = currentPage * pageSize + 1;
-    const end = Math.min(start + pageSize - 1, filteredData.length);
+    const end = Math.min(start + pageSize - 1, window.filteredData.length);
     
     // Atualizar elementos da paginação
     document.getElementById('pageStart').textContent = start;
     document.getElementById('pageEnd').textContent = end;
-    document.getElementById('totalItems').textContent = filteredData.length;
+    document.getElementById('totalItems').textContent = window.filteredData.length;
     document.getElementById('currentPage').textContent = currentPage + 1;
     document.getElementById('totalPages').textContent = totalPages;
 
@@ -217,7 +217,7 @@ async function updatePaginationInfo() {
 }
 
 async function changePage(action) {
-    const totalPages = Math.ceil(filteredData.length / pageSize);
+    const totalPages = Math.ceil(window.filteredData.length / pageSize);
     let newPage = currentPage;
 
     switch (action) {
@@ -246,10 +246,10 @@ async function changePage(action) {
     }
 }
 
-function handlePageSizeChange(e) {
+async function handlePageSizeChange(e) {
     pageSize = parseInt(e.target.value, 10);
     currentPage = 0;
-    filterAndDisplayResults();
+    await filterAndDisplayResults();
 }
 
 function showAnalysisResults() {
