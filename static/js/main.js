@@ -1,13 +1,14 @@
 let logData = [];
+let filteredData = [];
 let currentPage = 0;
+let pageSize = 10;
 let isProcessing = false;
-const BATCH_SIZE = 1000;
 const CHUNK_SIZE = 1000;
 
 // Gerenciamento de dados
 function getCurrentPageData() {
-    const start = currentPage * BATCH_SIZE;
-    return logData.slice(start, start + BATCH_SIZE);
+    const start = currentPage * pageSize;
+    return filteredData.slice(start, start + pageSize);
 }
 
 function processDataInChunks(data, chunkSize = CHUNK_SIZE) {
@@ -28,72 +29,108 @@ async function processResponse(response) {
             throw new Error(data.error || 'Failed to process log file');
         }
 
+        // Resetar estado
+        logData = [];
+        filteredData = [];
+        currentPage = 0;
+
+        // 1. Carregar dados
+        Logger.info('Stage: Loading data');
         logData = data.data || [];
+        filteredData = [...logData];
         Logger.info(`Loaded ${logData.length} records`);
-
-        // Analisar e logar eventos distintos
-        const uniqueEvents = [...new Set(logData.map(item => item.event))].filter(Boolean);
-        Logger.info('Eventos distintos encontrados:', uniqueEvents);
         
-        // Contar ocorrências de cada evento
-        const eventCounts = {};
-        logData.forEach(item => {
-            if (item.event) {
-                eventCounts[item.event] = (eventCounts[item.event] || 0) + 1;
-            }
-        });
-        Logger.info('Contagem de eventos:', eventCounts);
+        // 2. Mostrar containers
+        showAnalysisResults();
 
-        // Processar dados em etapas
-        const stages = [
-            {
-                name: 'Loading data',
-                action: () => {
-                    showAnalysisResults();
-                    return true;
-                }
-            },
-            {
-                name: 'Processing data',
-                action: () => {
-                    const chunks = processDataInChunks(logData);
-                    Logger.info(`Split data into ${chunks.length} chunks`);
-                    return chunks;
-                }
-            },
-            {
-                name: 'Updating filters',
-                action: () => {
-                    updateEventFilter(logData);
-                    updateTypeFilter(data.stats?.statement_types || {});
-                    updateTableFilter(data.tables || []);
-                    return true;
-                }
-            },
-            {
-                name: 'Rendering UI',
-                action: () => {
-                    updateKPIs(logData);
-                    displayResults(getCurrentPageData());
-                    updatePagination();
-                    return true;
-                }
-            }
-        ];
+        // 3. Processar dados em chunks
+        Logger.info('Stage: Processing data');
+        const chunks = await processDataInChunks(logData);
+        Logger.info(`Split data into ${chunks.length} chunks`);
 
-        // Executar etapas sequencialmente
-        for (const stage of stages) {
-            Logger.info(`Stage: ${stage.name}`);
-            await stage.action();
-        }
+        // 4. Atualizar filtros
+        Logger.info('Stage: Updating filters');
+        await updateEventFilter(logData);
+        await updateTypeFilter(data.stats?.statement_types || {});
+        await updateTableFilter(data.tables || []);
 
-        // Renderizar gráficos após processamento
-        Logger.info('Rendering charts');
-        renderCharts(logData);
+        // 5. Calcular e atualizar KPIs
+        Logger.info('Stage: Updating KPIs');
+        await calculateAndUpdateKPIs(filteredData);
+
+        // 6. Renderizar gráficos
+        Logger.info('Stage: Rendering charts');
+        await renderCharts(filteredData);
+
+        // 7. Exibir resultados e paginação
+        Logger.info('Stage: Displaying results');
+        await displayResults(getCurrentPageData());
+        await updatePaginationInfo();
 
         return true;
     } catch (error) {
         Logger.error('Error processing response', error);
+        throw error;
+    }
+}
+
+async function calculateAndUpdateKPIs(data) {
+    try {
+        Logger.info('Calculating KPIs');
+        
+        const stats = {
+            totalQueries: 0,
+            totalTime: 0,
+            maxTime: 0,
+            slowQueries: 0,
+            noIndexQueries: 0,
+            totalReads: 0,
+            totalWrites: 0,
+            totalFetches: 0
+        };
+
+        // Processar em lotes para evitar bloqueio da UI
+        const batchSize = 1000;
+        for (let i = 0; i < data.length; i += batchSize) {
+            const batch = data.slice(i, Math.min(i + batchSize, data.length));
+            
+            batch.forEach(query => {
+                if (query.statement) {
+                    stats.totalQueries++;
+                    stats.totalTime += query.execution_time || 0;
+                    stats.maxTime = Math.max(stats.maxTime, query.execution_time || 0);
+                    
+                    if (query.execution_time > 1000) stats.slowQueries++;
+                    if (!query.uses_index) stats.noIndexQueries++;
+                    
+                    stats.totalReads += parseInt(query.reads) || 0;
+                    stats.totalWrites += parseInt(query.writes) || 0;
+                    stats.totalFetches += parseInt(query.fetches) || 0;
+                }
+            });
+
+            // Permitir que a UI atualize
+            await new Promise(resolve => setTimeout(resolve, 0));
+        }
+
+        const avgTime = stats.totalQueries ? Math.round(stats.totalTime / stats.totalQueries) : 0;
+        const indexUsageRate = stats.totalQueries ? 
+            ((stats.totalQueries - stats.noIndexQueries) / stats.totalQueries * 100) : 0;
+
+        // Atualizar elementos DOM
+        document.getElementById('totalQueries').textContent = formatNumber(stats.totalQueries);
+        document.getElementById('avgExecTime').textContent = formatDuration(avgTime);
+        document.getElementById('maxExecTime').textContent = formatDuration(stats.maxTime);
+        document.getElementById('slowQueries').textContent = formatNumber(stats.slowQueries);
+        document.getElementById('noIndexQueries').textContent = formatNumber(stats.noIndexQueries);
+        document.getElementById('indexUsageRate').textContent = `${indexUsageRate.toFixed(1)}%`;
+        document.getElementById('totalReads').textContent = formatNumber(stats.totalReads);
+        document.getElementById('totalWrites').textContent = formatNumber(stats.totalWrites);
+        document.getElementById('totalFetches').textContent = formatNumber(stats.totalFetches);
+
+        Logger.info('KPIs updated successfully');
+    } catch (error) {
+        Logger.error('Error calculating KPIs', error);
         throw error;
     }
 }
@@ -108,8 +145,6 @@ async function handleFormSubmit(e) {
     
     Logger.info('Starting log analysis');
     isProcessing = true;
-    logData = [];
-    currentPage = 0;
     
     const formData = new FormData();
     const fileInput = document.getElementById('logFile');
@@ -157,59 +192,71 @@ async function handleFormSubmit(e) {
     }
 }
 
-function updatePagination() {
-    if (!logData.length) {
+async function updatePaginationInfo() {
+    if (!filteredData.length) {
         Logger.debug('No data for pagination');
         return;
     }
 
-    const totalPages = Math.ceil(logData.length / BATCH_SIZE);
-    const start = currentPage * BATCH_SIZE;
-    const end = Math.min(start + BATCH_SIZE, logData.length);
+    const totalPages = Math.ceil(filteredData.length / pageSize);
+    const start = currentPage * pageSize + 1;
+    const end = Math.min(start + pageSize - 1, filteredData.length);
     
-    const paginationElement = document.getElementById('pagination');
-    if (!paginationElement) {
-        Logger.error('Pagination element not found');
-        return;
-    }
+    // Atualizar elementos da paginação
+    document.getElementById('pageStart').textContent = start;
+    document.getElementById('pageEnd').textContent = end;
+    document.getElementById('totalItems').textContent = filteredData.length;
+    document.getElementById('currentPage').textContent = currentPage + 1;
+    document.getElementById('totalPages').textContent = totalPages;
 
-    paginationElement.classList.remove('hidden');
-    paginationElement.innerHTML = `
-        <div class="flex items-center justify-between px-4 py-3 bg-white border-t border-gray-200 sm:px-6">
-            <div class="flex justify-between flex-1 sm:hidden">
-                <button onclick="changePage(${currentPage - 1})" 
-                        ${currentPage === 0 ? 'disabled' : ''}
-                        class="relative inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 ${currentPage === 0 ? 'opacity-50 cursor-not-allowed' : ''}">
-                    Previous
-                </button>
-                <button onclick="changePage(${currentPage + 1})"
-                        ${currentPage >= totalPages - 1 ? 'disabled' : ''}
-                        class="relative inline-flex items-center px-4 py-2 ml-3 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 ${currentPage >= totalPages - 1 ? 'opacity-50 cursor-not-allowed' : ''}">
-                    Next
-                </button>
-            </div>
-            <div class="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
-                <div>
-                    <p class="text-sm text-gray-700">
-                        Showing <span class="font-medium">${start + 1}</span> to <span class="font-medium">${end}</span> of
-                        <span class="font-medium">${logData.length}</span> results
-                    </p>
-                </div>
-            </div>
-        </div>
-    `;
+    // Atualizar estado dos botões
+    document.getElementById('firstPage').disabled = currentPage === 0;
+    document.getElementById('prevPage').disabled = currentPage === 0;
+    document.getElementById('nextPage').disabled = currentPage >= totalPages - 1;
+    document.getElementById('lastPage').disabled = currentPage >= totalPages - 1;
 }
 
-function changePage(newPage) {
-    const totalPages = Math.ceil(logData.length / BATCH_SIZE);
-    if (newPage < 0 || newPage >= totalPages) {
-        Logger.warn('Invalid page number', { newPage, totalPages });
-        return;
+async function changePage(action) {
+    const totalPages = Math.ceil(filteredData.length / pageSize);
+    let newPage = currentPage;
+
+    switch (action) {
+        case 'first':
+            newPage = 0;
+            break;
+        case 'prev':
+            newPage = Math.max(0, currentPage - 1);
+            break;
+        case 'next':
+            newPage = Math.min(totalPages - 1, currentPage + 1);
+            break;
+        case 'last':
+            newPage = totalPages - 1;
+            break;
+        default:
+            if (typeof action === 'number') {
+                newPage = Math.max(0, Math.min(totalPages - 1, action));
+            }
     }
-    
-    currentPage = newPage;
-    displayResults(getCurrentPageData());
-    updatePagination();
+
+    if (newPage !== currentPage) {
+        currentPage = newPage;
+        await displayResults(getCurrentPageData());
+        await updatePaginationInfo();
+    }
+}
+
+function handlePageSizeChange(e) {
+    pageSize = parseInt(e.target.value, 10);
+    currentPage = 0;
+    filterAndDisplayResults();
+}
+
+function showAnalysisResults() {
+    document.getElementById('filters')?.classList.remove('hidden');
+    document.getElementById('kpis')?.classList.remove('hidden');
+    document.getElementById('results')?.classList.remove('hidden');
+    document.getElementById('charts')?.classList.remove('hidden');
 }
 
 // Inicialização
@@ -227,11 +274,13 @@ function initializeApp() {
     const typeFilter = document.getElementById('typeFilter');
     const tableFilter = document.getElementById('tableFilter');
     const viewFilter = document.getElementById('viewFilter');
+    const pageSizeSelect = document.getElementById('pageSizeSelect');
 
     if (timeFilter) timeFilter.addEventListener('input', filterAndDisplayResults);
     if (typeFilter) typeFilter.addEventListener('change', filterAndDisplayResults);
     if (tableFilter) tableFilter.addEventListener('change', filterAndDisplayResults);
     if (viewFilter) viewFilter.addEventListener('change', handleViewFilter);
+    if (pageSizeSelect) pageSizeSelect.addEventListener('change', handlePageSizeChange);
     
     Logger.debug('Event listeners initialized');
 }
@@ -240,4 +289,10 @@ document.addEventListener('DOMContentLoaded', initializeApp);
 
 // Expose necessary functions
 window.changePage = changePage;
-window.updatePagination = updatePagination;
+window.updatePaginationInfo = updatePaginationInfo;
+window.handlePageSizeChange = handlePageSizeChange;
+window.logData = logData;
+window.filteredData = filteredData;
+window.getCurrentPageData = getCurrentPageData;
+window.showAnalysisResults = showAnalysisResults;
+window.calculateAndUpdateKPIs = calculateAndUpdateKPIs;
